@@ -1,3 +1,4 @@
+import { removeListener } from 'process'
 import sqlite3 from 'sqlite3'
 
 const StatusType = {
@@ -130,7 +131,10 @@ async function completeJob(db: sqlite3.Database, job: Job): Promise<boolean> {
   })
 }
 
-async function enqueueJob(db: sqlite3.Database, params: JobParams) {
+async function enqueueJob(
+  db: sqlite3.Database,
+  params: JobParams
+): Promise<number> {
   return new Promise((resolve, reject) => {
     db.run(
       `INSERT INTO jobs(
@@ -150,8 +154,8 @@ async function enqueueJob(db: sqlite3.Database, params: JobParams) {
         `+${params.time_limit_seconds} second`,
       ],
       function (this: RunResult, err: Error) {
-        if (err != undefined) {
-          reject(err)
+        if (err != undefined || this.lastID == undefined) {
+          reject(err ?? new Error('Failed to create job'))
         } else {
           resolve(this.lastID)
         }
@@ -289,7 +293,25 @@ export async function createClient<T>(path: string) {
     enqueueJob(params: JobParamsT) {
       const { time_limit_seconds, max_attempts, ...rest } = params
       const description = JSON.stringify(rest)
-      enqueueJob(db, { time_limit_seconds, max_attempts, description })
+      return enqueueJob(db, { time_limit_seconds, max_attempts, description })
+    },
+
+    addListener(cb: (eventType: string, rowId: number) => void) {
+      return db.addListener(
+        'change',
+        (
+          eventType: string,
+          _database: string,
+          _table: string,
+          rowId: number
+        ) => {
+          cb(eventType, rowId)
+        }
+      )
+    },
+
+    removeListener(cb: (...args: any[]) => void) {
+      return db.removeListener('change', cb)
     },
 
     getJobs(): Promise<Job[]> {

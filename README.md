@@ -22,7 +22,7 @@ const client = await createClient<JobDescription>(process.env.QUEUE_DB_PATH)
 
 client.enqueueJob({
   type: 'download',
-  url: 'http://roms.com/pokemon.zip'
+  url: 'http://roms.com/pokemon.zip',
   storage: 'C:\\roms',
   maximum_attempts: 10,
   time_limit_seconds: 60,
