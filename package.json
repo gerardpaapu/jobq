@@ -2,6 +2,10 @@
   "name": "@donothing/jobq",
   "type": "module",
   "version": "1.0.1",
+  "repository": {
+    "type": "git",
+    "url": "git@github.com:gerardpaapu/jobq.git"
+  },
   "description": "a job queue backed by sqlite",
   "files": [
     "./dist"
