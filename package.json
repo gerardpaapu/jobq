@@ -1,9 +1,11 @@
 {
   "name": "@donothing/jobq",
   "type": "module",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "a job queue backed by sqlite",
-  "files": ["./dist"],
+  "files": [
+    "./dist"
+  ],
   "exports": {
     ".": {
       "import": {
