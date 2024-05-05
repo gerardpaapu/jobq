@@ -32,7 +32,7 @@ interface RunResult {
   lastID: number | undefined
 }
 
-export async function getNextJob(db: sqlite3.Database) {
+async function getNextJob(db: sqlite3.Database) {
   return new Promise<Job | undefined>((resolve, reject) => {
     db.get(
       `UPDATE jobs
@@ -66,7 +66,7 @@ export async function getNextJob(db: sqlite3.Database) {
   })
 }
 
-export async function failJob(db: sqlite3.Database, job: Job, reason: string) {
+async function failJob(db: sqlite3.Database, job: Job, reason: string) {
   return new Promise((resolve, reject) => {
     if (job.attempts_remaining <= 0) {
       db.run(
@@ -107,10 +107,7 @@ export async function failJob(db: sqlite3.Database, job: Job, reason: string) {
   })
 }
 
-export async function completeJob(
-  db: sqlite3.Database,
-  job: Job
-): Promise<boolean> {
+async function completeJob(db: sqlite3.Database, job: Job): Promise<boolean> {
   const { id, attempts_remaining } = job
   return new Promise((resolve, reject) => {
     db.run(
@@ -133,7 +130,7 @@ export async function completeJob(
   })
 }
 
-export async function enqueueJob(db: sqlite3.Database, params: JobParams) {
+async function enqueueJob(db: sqlite3.Database, params: JobParams) {
   return new Promise((resolve, reject) => {
     db.run(
       `INSERT INTO jobs(
@@ -163,7 +160,7 @@ export async function enqueueJob(db: sqlite3.Database, params: JobParams) {
   })
 }
 
-export async function initialiseDB(db: sqlite3.Database): Promise<void> {
+async function initialiseDB(db: sqlite3.Database): Promise<void> {
   return new Promise((resolve, reject) => {
     db.exec(
       `PRAGMA journal_mode = WAL;
@@ -204,13 +201,13 @@ export async function initialiseDB(db: sqlite3.Database): Promise<void> {
   })
 }
 
-export async function getJobs(db: sqlite3.Database) {
-  return new Promise((resolve, reject) => {
+async function getJobs(db: sqlite3.Database) {
+  return new Promise<Job[]>((resolve, reject) => {
     db.all(`SELECT * FROM jobs`, (err: Error, data: Array<unknown>) => {
       if (err != undefined) {
         reject(err)
       } else {
-        resolve(data as Array<Job>)
+        resolve(data as Job[])
       }
     })
   })
@@ -220,7 +217,7 @@ function isBusyError(e: unknown) {
   return e instanceof Error && 'errno' in e && e.errno === 5
 }
 
-export async function startWorker(
+async function startWorker(
   db: sqlite3.Database,
   worker: (task: string) => Promise<undefined | JobParams[]>
 ) {
@@ -293,6 +290,10 @@ export async function createClient<T>(path: string) {
       const { time_limit_seconds, max_attempts, ...rest } = params
       const description = JSON.stringify(rest)
       enqueueJob(db, { time_limit_seconds, max_attempts, description })
+    },
+
+    getJobs(): Promise<Job[]> {
+      return getJobs(db)
     },
 
     startWorkers(

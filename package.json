@@ -1,8 +1,9 @@
 {
-  "name": "quppy",
+  "name": "@donothing/jobq",
   "type": "module",
   "version": "1.0.0",
-  "description": "",
+  "description": "a job queue backed by sqlite",
+  "files": ["./dist"],
   "exports": {
     ".": {
       "import": {
@@ -16,7 +17,11 @@
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
-  "author": "",
+  "private": "false",
+  "publishConfig": {
+    "access": "public"
+  },
+  "author": "gerard@gerardpaapu.com",
   "license": "ISC",
   "dependencies": {
     "sqlite3": "^5.1.7"
