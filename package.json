@@ -4,7 +4,7 @@
   "version": "1.0.2",
   "repository": {
     "type": "git",
-    "url": "git@github.com:gerardpaapu/jobq.git"
+    "url": "git+ssh://git@github.com/gerardpaapu/jobq.git"
   },
   "description": "a job queue backed by sqlite",
   "files": [
