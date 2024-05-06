@@ -1,4 +1,3 @@
-import { removeListener } from 'process'
 import sqlite3 from 'sqlite3'
 
 const StatusType = {
@@ -52,7 +51,7 @@ async function getNextJob(db: sqlite3.Database) {
             AND attempts_remaining > 0)
         -- We want to pick up jobs that are due soon I think?
         -- Maybe this should be randomised
-        ORDER BY deadline DESC
+        ORDER BY attempts_remaining, deadline DESC
         LIMIT 1
       )
       RETURNING *`,
@@ -80,11 +79,10 @@ async function failJob(db: sqlite3.Database, job: Job, reason: string) {
          AND attempts_remaining = ?`,
         [reason, job.id, job.attempts_remaining],
         function (this: RunResult, err: Error) {
-          const { changes, lastID } = this
           if (err != undefined) {
             reject(err)
           } else {
-            resolve(changes === 1)
+            resolve(this.changes === 1)
           }
         }
       )
@@ -223,10 +221,15 @@ function isBusyError(e: unknown) {
 
 async function startWorker(
   db: sqlite3.Database,
-  worker: (task: string) => Promise<undefined | JobParams[]>
+  worker: (task: string) => Promise<undefined | JobParams[]>,
+  abortSignal?: AbortSignal
 ) {
   let busy_errors = 0
   for (;;) {
+    if (abortSignal?.aborted) {
+      throw abortSignal.reason
+    }
+
     let job: Job | undefined
     let err: unknown
     try {
@@ -246,6 +249,10 @@ async function startWorker(
 
     if (!job) {
       continue
+    }
+
+    if (abortSignal?.aborted) {
+      throw abortSignal.reason
     }
 
     let complete
@@ -284,9 +291,12 @@ async function sleep(n: number) {
   })
 }
 
+let listeners = new WeakMap<any, (...args: any[]) => void>()
+
 export async function createClient<T>(path: string) {
   type JobParamsT = T & Omit<JobParams, 'description'>
   const db = new sqlite3.Database(path)
+  let signal = { stopped: false }
   await initialiseDB(db)
 
   return {
@@ -297,21 +307,24 @@ export async function createClient<T>(path: string) {
     },
 
     addListener(cb: (eventType: string, rowId: number) => void) {
-      return db.addListener(
-        'change',
-        (
-          eventType: string,
-          _database: string,
-          _table: string,
-          rowId: number
-        ) => {
-          cb(eventType, rowId)
-        }
-      )
+      const listener = (
+        eventType: string,
+        _database: string,
+        _table: string,
+        rowId: number
+      ) => {
+        cb(eventType, rowId)
+      }
+      listeners.set(cb, listener)
+      return db.addListener('change', listener)
     },
 
     removeListener(cb: (...args: any[]) => void) {
-      return db.removeListener('change', cb)
+      let listener = listeners.get(cb)
+      if (listener) {
+        listeners.delete(cb)
+        return db.removeListener('change', listener)
+      }
     },
 
     getJobs(): Promise<Job[]> {
@@ -320,21 +333,26 @@ export async function createClient<T>(path: string) {
 
     startWorkers(
       worker: (params: T) => Promise<void | undefined | JobParamsT[]>,
-      n: number
+      n: number,
+      abortSignal?: AbortSignal
     ) {
       for (let i = 0; i < n; i++) {
-        startWorker(db, async (json: string) => {
-          const t = await worker(JSON.parse(json))
-          if (!t) {
-            return undefined
-          }
+        startWorker(
+          db,
+          async (json: string) => {
+            const t = await worker(JSON.parse(json))
+            if (!t) {
+              return undefined
+            }
 
-          return t.map((jt) => {
-            const { max_attempts, time_limit_seconds, ...rest } = jt
-            const description = JSON.stringify(jt)
-            return { max_attempts, time_limit_seconds, description }
-          })
-        })
+            return t.map((jt) => {
+              const { max_attempts, time_limit_seconds, ...rest } = jt
+              const description = JSON.stringify(jt)
+              return { max_attempts, time_limit_seconds, description }
+            })
+          },
+          abortSignal
+        )
       }
     },
   }
