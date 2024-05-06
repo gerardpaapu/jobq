@@ -11,10 +11,13 @@ const BACKOFF_K = 50
 
 type Status = 1 | 2 | 3 | 4
 
-interface JobParams {
-  description: string
+interface JobParamsBase {
   time_limit_seconds: number
   max_attempts: number
+}
+
+interface JobParamsWithDescription extends JobParamsBase {
+  description: string
 }
 
 interface Job {
@@ -131,7 +134,7 @@ async function completeJob(db: sqlite3.Database, job: Job): Promise<boolean> {
 
 async function enqueueJob(
   db: sqlite3.Database,
-  params: JobParams
+  params: JobParamsWithDescription
 ): Promise<number> {
   return new Promise((resolve, reject) => {
     db.run(
@@ -221,7 +224,7 @@ function isBusyError(e: unknown) {
 
 async function startWorker(
   db: sqlite3.Database,
-  worker: (task: string) => Promise<undefined | JobParams[]>,
+  worker: (task: string) => Promise<undefined | JobParamsWithDescription[]>,
   abortSignal?: AbortSignal
 ) {
   let busy_errors = 0
@@ -293,14 +296,15 @@ async function sleep(n: number) {
 
 let listeners = new WeakMap<any, (...args: any[]) => void>()
 
-export async function createClient<T>(path: string) {
-  type JobParamsT = T & Omit<JobParams, 'description'>
+export async function createClient<JobParams extends JobParamsBase>(
+  path: string
+) {
   const db = new sqlite3.Database(path)
   let signal = { stopped: false }
   await initialiseDB(db)
 
   return {
-    enqueueJob(params: JobParamsT) {
+    enqueueJob(params: JobParams) {
       const { time_limit_seconds, max_attempts, ...rest } = params
       const description = JSON.stringify(rest)
       return enqueueJob(db, { time_limit_seconds, max_attempts, description })
@@ -332,7 +336,7 @@ export async function createClient<T>(path: string) {
     },
 
     startWorkers(
-      worker: (params: T) => Promise<void | undefined | JobParamsT[]>,
+      worker: (params: JobParams) => Promise<void | undefined | JobParams[]>,
       n: number,
       abortSignal?: AbortSignal
     ) {

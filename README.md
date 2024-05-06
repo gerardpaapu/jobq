@@ -8,15 +8,18 @@ So you should be backed by a service like redis that can be accessed by other ma
 
 Still, I have some students who need to get out of the habit of putting long-running processes into their request-handlers, and I don't want to spin up a bunch of new infra for them.
 
-So think of this as a Fisher Price: My First Work Queue. Maybe this was all a silly idea and I should just spin up a RabbitMQ instance or something...
+So think of this as a Fisher Price: My First Job Queue. Maybe this was all a silly idea and I should just spin up a RabbitMQ instance or something...
 
 ... anyway, connect from your app server like this:
 
 ```ts
-import { createClient } from '@donothing/jobq'
+import { createClient, JobParamsBase } from '@donothing/jobq'
 
-type MyJobDescription = 
-  | { type: 'download', url: string, storage: string }
+interface JobDescription extends JobParamsBase {
+  type: 'download',
+  url: string,
+  storage: string 
+}
 
 const client = await createClient<JobDescription>(process.env.QUEUE_DB_PATH)
 
@@ -32,14 +35,18 @@ client.enqueueJob({
 ```ts
 import { createClient } from '@donothing/jobq'
 
-type MyJobDescription = 
-  | { type: 'download', url: string, storage: string }
+interface JobDescription extends JobParamsBase {
+  type: 'download',
+  url: string,
+  storage: string 
+}
 
 const client = await createClient<JobDescription>(process.env.QUEUE_DB_PATH)
 const MAX_WORKERS = 4
 
 client.startWorkers(async ({ url, storage }) => {
   const res = await fetch(url)
-  await fs.writeFile(storage, res.body)
+  const data = await res.blob()
+  await fs.writeFile(storage, data)
 }, MAX_WORKERS)
 ```
